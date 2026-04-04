@@ -9,6 +9,7 @@
 #define __SOUND_HDA_GENERIC_H
 
 #include <linux/leds.h>
+#include <linux/version.h>
 #include "hda_auto_parser.h"
 
 struct hda_jack_callback;
@@ -311,7 +312,15 @@ enum {
 int snd_hda_gen_spec_init(struct hda_gen_spec *spec);
 
 int snd_hda_gen_init(struct hda_codec *codec);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+void snd_hda_gen_remove(struct hda_codec *codec);
+static inline void snd_hda_gen_free(struct hda_codec *codec)
+{
+	snd_hda_gen_remove(codec);
+}
+#else
 void snd_hda_gen_free(struct hda_codec *codec);
+#endif
 
 int snd_hda_get_path_idx(struct hda_codec *codec, struct nid_path *path);
 struct nid_path *snd_hda_get_path_from_idx(struct hda_codec *codec, int idx);

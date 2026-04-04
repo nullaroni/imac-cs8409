@@ -1076,11 +1076,11 @@ static void cs8409_cs42l42_hw_init(struct hda_codec *codec)
 	cs8409_enable_ur(codec, 1);
 }
 
-static const struct hda_codec_ops cs8409_cs42l42_patch_ops = {
+static const struct cs8409_variant_ops cs8409_cs42l42_vops = {
 	.build_controls = cs8409_build_controls,
 	.build_pcms = snd_hda_gen_build_pcms,
 	.init = cs8409_init,
-	.free = cs8409_free,
+	.destroy = cs8409_free,
 	.unsol_event = cs8409_cs42l42_jack_unsol_event,
 	.suspend = cs8409_cs42l42_suspend,
 };
@@ -1134,7 +1134,7 @@ void cs8409_cs42l42_fixups(struct hda_codec *codec, const struct hda_fixup *fix,
 		spec->scodecs[CS8409_CODEC0] = &cs8409_cs42l42_codec;
 		spec->num_scodecs = 1;
 		spec->scodecs[CS8409_CODEC0]->codec = codec;
-		codec->patch_ops = cs8409_cs42l42_patch_ops;
+		spec->vops = &cs8409_cs42l42_vops;
 
 		spec->gen.suppress_auto_mute = 1;
 		spec->gen.no_primary_hp = 1;
@@ -1304,11 +1304,11 @@ static void dolphin_hw_init(struct hda_codec *codec)
 	cs8409_enable_ur(codec, 1);
 }
 
-static const struct hda_codec_ops cs8409_dolphin_patch_ops = {
+static const struct cs8409_variant_ops cs8409_dolphin_vops = {
 	.build_controls = cs8409_build_controls,
 	.build_pcms = snd_hda_gen_build_pcms,
 	.init = cs8409_init,
-	.free = cs8409_free,
+	.destroy = cs8409_free,
 	.unsol_event = dolphin_jack_unsol_event,
 	.suspend = cs8409_cs42l42_suspend,
 };
@@ -1371,7 +1371,7 @@ void dolphin_fixups(struct hda_codec *codec, const struct hda_fixup *fix, int ac
 		spec->num_scodecs = 2;
 		spec->gen.suppress_vmaster = 1;
 
-		codec->patch_ops = cs8409_dolphin_patch_ops;
+		spec->vops = &cs8409_dolphin_vops;
 
 		/* GPIO 1,5 out, 0,4 in */
 		spec->gpio_dir = spec->scodecs[CS8409_CODEC0]->reset_gpio |
@@ -1487,15 +1487,107 @@ static int patch_cs8409(struct hda_codec *codec)
 
 #include "patch_cirrus_apple.h"
 
+static int cs8409_drv_probe(struct hda_codec *codec, const struct hda_device_id *id)
+{
+	(void)id;
+	return patch_cs8409(codec);
+}
+
+static void cs8409_drv_remove(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec)
+		return;
+	if (spec->vops && spec->vops->destroy)
+		spec->vops->destroy(codec);
+	else
+		cs8409_free(codec);
+}
+
+static int cs8409_drv_build_controls(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->build_controls)
+		return -EINVAL;
+	return spec->vops->build_controls(codec);
+}
+
+static int cs8409_drv_build_pcms(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->build_pcms)
+		return -EINVAL;
+	return spec->vops->build_pcms(codec);
+}
+
+static int cs8409_drv_init(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->init)
+		return 0;
+	return spec->vops->init(codec);
+}
+
+static void cs8409_drv_unsol_event(struct hda_codec *codec, unsigned int res)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (spec && spec->vops && spec->vops->unsol_event)
+		spec->vops->unsol_event(codec, res);
+}
+
+static int cs8409_drv_suspend(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->suspend)
+		return 0;
+	return spec->vops->suspend(codec);
+}
+
+static int cs8409_drv_resume(struct hda_codec *codec)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->resume)
+		return 0;
+	return spec->vops->resume(codec);
+}
+
+static int cs8409_drv_check_power_status(struct hda_codec *codec, hda_nid_t nid)
+{
+	struct cs8409_spec *spec = codec->spec;
+
+	if (!spec || !spec->vops || !spec->vops->check_power_status)
+		return 0;
+	return spec->vops->check_power_status(codec, nid);
+}
+
+static const struct hda_codec_ops cs8409_driver_ops = {
+	.probe = cs8409_drv_probe,
+	.remove = cs8409_drv_remove,
+	.build_controls = cs8409_drv_build_controls,
+	.build_pcms = cs8409_drv_build_pcms,
+	.init = cs8409_drv_init,
+	.unsol_event = cs8409_drv_unsol_event,
+	.suspend = cs8409_drv_suspend,
+	.resume = cs8409_drv_resume,
+	.check_power_status = cs8409_drv_check_power_status,
+};
 
 static const struct hda_device_id snd_hda_id_cs8409[] = {
-	HDA_CODEC_ENTRY(0x10138409, "CS8409", patch_cs8409),
-	{} /* terminator */
+	HDA_CODEC_ID_MODEL(0x10138409, "CS8409", 0),
+	{}
 };
 MODULE_DEVICE_TABLE(hdaudio, snd_hda_id_cs8409);
 
 static struct hda_codec_driver cs8409_driver = {
 	.id = snd_hda_id_cs8409,
+	.ops = &cs8409_driver_ops,
 };
 module_hda_codec_driver(cs8409_driver);
 

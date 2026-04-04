@@ -9,6 +9,15 @@
 #ifndef __CS8409_PATCH_H
 #define __CS8409_PATCH_H
 
+/*
+ * Apple-specific fields and patch_cirrus_apple.h require APPLE_CODECS. The local
+ * Makefile passes -DAPPLE_CODECS via CFLAGS_MODULE; default here so a plain
+ * "make -C .../build M=$(pwd) modules" without those flags still compiles.
+ */
+#ifndef APPLE_CODECS
+#define APPLE_CODECS 1
+#endif
+
 #include <linux/pci.h>
 #include <sound/tlv.h>
 #include <linux/workqueue.h>
@@ -339,9 +348,25 @@ struct sub_codec {
 	s8 vol[CS42L42_VOLUMES];
 };
 
+/*
+ * Per-machine callbacks; older kernels stored these in codec->patch_ops (removed
+ * in favor of struct hda_codec_driver + ops->probe/remove/...).
+ */
+struct cs8409_variant_ops {
+	int (*build_controls)(struct hda_codec *codec);
+	int (*build_pcms)(struct hda_codec *codec);
+	int (*init)(struct hda_codec *codec);
+	void (*unsol_event)(struct hda_codec *codec, unsigned int res);
+	int (*suspend)(struct hda_codec *codec);
+	int (*resume)(struct hda_codec *codec);
+	int (*check_power_status)(struct hda_codec *codec, hda_nid_t nid);
+	void (*destroy)(struct hda_codec *codec);
+};
+
 struct cs8409_spec {
 	struct hda_gen_spec gen;
 	struct hda_codec *codec;
+	const struct cs8409_variant_ops *vops;
 
 	struct sub_codec *scodecs[CS8409_MAX_CODECS];
 	unsigned int num_scodecs;
