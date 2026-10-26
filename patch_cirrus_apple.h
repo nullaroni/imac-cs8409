@@ -1257,7 +1257,17 @@ static int cs_8409_apple_boot_init(struct hda_codec *codec)
 				}
 				else if (stream == SNDRV_PCM_STREAM_CAPTURE)
 				{
-					//if (hinfo->nid == 0x22)
+					/* Generic HDA setup often binds capture to a dead line-in ADC.
+					 * Force the exposed capture stream onto the internal mic ADC
+					 * (0x23 on iMac 18,1/18,2/18,3) unless it is already the mic
+					 * or the headset mic.
+					 */
+					if (hinfo->nid && hinfo->nid != spec->intmike_adc_nid && hinfo->nid != 0x1a) {
+						mycodec_info(codec,
+							"capture stream nid 0x%02x is not intmike (0x%02x) or headset, forcing intmike\n",
+							hinfo->nid, spec->intmike_adc_nid);
+						hinfo->nid = spec->intmike_adc_nid;
+					}
 					if (hinfo->nid == spec->intmike_adc_nid)
 					{
 						// this is the internal mike
